@@ -1,6 +1,7 @@
 import os
 import logging
 import asyncio
+import re
 from datetime import time as dtime, timezone as dt_timezone, datetime
 
 from groq import Groq
@@ -21,6 +22,7 @@ CHANNEL_USERNAME = os.getenv("CHANNEL_USERNAME", "@Fx_sptrading")
 
 groq_client = Groq(api_key=GROQ_API_KEY)
 MODEL_NAME = "qwen/qwen3.6-27b"
+
 # ===================== شخصیت ربات =====================
 COACH_SYSTEM_PROMPT = """تو یک کوچ تخصصی روانشناسی معامله‌گری (ترید) هستی، نه یک تراپیست یا روانپزشک دارای مجوز بالینی.
 وظیفه‌ت کمک به معامله‌گرها برای شناخت ریشه مشکلات روانی‌شون در بازارهای مالی (مثل ترس از دست دادن فرصت، طمع، انتقام‌جویی بعد از ضرر، عدم انضباط، بیش‌اعتمادی، ترس از ضرر) و ارائه راهکارهای عملی و قابل اجراست.
@@ -65,6 +67,11 @@ TOPICS = [
 ]
 
 # ===================== فراخوانی Groq =====================
+def _strip_thinking(text: str) -> str:
+    """حذف بخش 'فکر کردن' مدل (داخل تگ think) و نگه داشتن فقط جواب نهایی"""
+    cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+    return cleaned.strip()
+
 def _call_groq(system_prompt: str, user_message: str) -> str:
     messages = []
     if system_prompt:
@@ -75,9 +82,11 @@ def _call_groq(system_prompt: str, user_message: str) -> str:
         model=MODEL_NAME,
         messages=messages,
         temperature=0.7,
-        max_tokens=1024,
+        max_tokens=2048,
     )
-    return completion.choices[0].message.content
+    raw = completion.choices[0].message.content
+    cleaned = _strip_thinking(raw)
+    return cleaned if cleaned else raw
 
 async def ask_ai(system_prompt: str, user_message: str) -> str:
     try:
