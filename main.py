@@ -5,8 +5,8 @@ import re
 from datetime import time as dtime, timezone as dt_timezone, datetime
 
 from groq import Groq
-from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 
 # ===================== لاگ =====================
 logging.basicConfig(
@@ -22,6 +22,7 @@ CHANNEL_USERNAME = os.getenv("CHANNEL_USERNAME", "@Fx_sptrading")
 
 groq_client = Groq(api_key=GROQ_API_KEY)
 MODEL_NAME = "qwen/qwen3.6-27b"
+CHANNEL_LINK = f"https://t.me/{CHANNEL_USERNAME.lstrip('@')}"
 
 # ===================== شخصیت ربات =====================
 COACH_SYSTEM_PROMPT = """تو یک کوچ تخصصی روانشناسی معامله‌گری (ترید) هستی، نه یک تراپیست یا روانپزشک دارای مجوز بالینی.
@@ -95,20 +96,60 @@ async def ask_ai(system_prompt: str, user_message: str) -> str:
         logger.error(f"Groq Error: {e}")
         return "⚠️ یه مشکل موقت پیش اومد، لطفاً چند لحظه دیگه دوباره امتحان کن."
 
+# ===================== بررسی عضویت در کانال =====================
+async def is_member(bot, user_id: int) -> bool:
+    try:
+        member = await bot.get_chat_member(chat_id=CHANNEL_USERNAME, user_id=user_id)
+        return member.status in ("member", "administrator", "creator")
+    except Exception as e:
+        logger.error(f"خطا در بررسی عضویت: {e}")
+        return False
+
+def join_keyboard():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("📢 عضویت در کانال", url=CHANNEL_LINK)],
+        [InlineKeyboardButton("✅ عضو شدم، بررسی کن", callback_data="check_join")]
+    ])
+
+JOIN_PROMPT = (
+    "🔒 برای استفاده از ربات، اول باید عضو کانال ما بشی:\n\n"
+    "بعد از عضویت، روی دکمه «عضو شدم، بررسی کن» بزن 👇"
+)
+
 # ===================== هندلرها =====================
 async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not await is_member(ctx.bot, update.effective_user.id):
+        await update.message.reply_text(JOIN_PROMPT, reply_markup=join_keyboard())
+        return
+
     await update.message.reply_text(
-        "👋 سلام، خوش اومدی!\n\n"
-        "🧠 من *کوچ روانشناسی ترید* هستم.\n\n"
-        "هر مشکلی که توی معامله‌گری باهاش دست‌وپنجه نرم می‌کنی رو برام بنویس "
-        "(مثل ترس، طمع، انتقام‌جویی، عدم انضباط و...) "
-        "تا با هم ریشه‌ش رو پیدا کنیم و راهکار عملی بدم بهت.\n\n"
-        "💬 فقط کافیه پیام بدی!\n\n"
-        "_توجه: من جایگزین درمان روانشناسی بالینی نیستم و در موارد جدی، حتماً به متخصص واقعی مراجعه کن._",
+        "🧠✨ به *PsyTrader* خوش اومدی!\n\n"
+        "اینجا جاییه که روانشناسی معامله‌گری رو جدی می‌گیریم. "
+        "بیشتر شکست‌های ترید از تحلیل تکنیکال ضعیف نمیاد — از *ذهنیتیه که با اون وارد بازار می‌شیم.*\n\n"
+        "من کوچ شخصی توام برای شناخت و مدیریت همون الگوهای ذهنی: FOMO، انتقام‌جویی بعد از ضرر، بی‌انضباطی، ترس از ضرر، بیش‌اعتمادی و هر چیزی که نمی‌ذاره با آرامش معامله کنی.\n\n"
+        "📝 *چطور کار می‌کنه؟*\n"
+        "همین الان، هر چالشی که توی ترید باهاش دست‌وپنجه نرم می‌کنی رو برام بنویس. با هم ریشه‌ش رو پیدا می‌کنیم و چند قدم عملی و قابل اجرا بهت می‌دم.\n\n"
+        "💬 فقط کافیه پیامت رو بفرستی!\n\n"
+        "_من جایگزین درمان روانشناسی بالینی نیستم؛ در شرایط جدی، حتماً با یک متخصص واقعی صحبت کن._",
         parse_mode="Markdown"
     )
 
+async def handle_check_join(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if await is_member(ctx.bot, query.from_user.id):
+        await query.answer("✅ عضویتت تایید شد!")
+        await query.message.edit_text(
+            "✅ عالی، عضویتت تایید شد!\n\n"
+            "حالا هر چالشی که توی ترید باهاش دست‌وپنجه نرم می‌کنی رو برام بنویس تا با هم ریشه‌ش رو پیدا کنیم 💬"
+        )
+    else:
+        await query.answer("هنوز عضو کانال نشدی! اول عضو شو، بعد دوباره بزن.", show_alert=True)
+
 async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not await is_member(ctx.bot, update.effective_user.id):
+        await update.message.reply_text(JOIN_PROMPT, reply_markup=join_keyboard())
+        return
+
     user_text = update.message.text
     await update.message.chat.send_action("typing")
     reply = await ask_ai(COACH_SYSTEM_PROMPT, user_text)
@@ -142,6 +183,7 @@ def main():
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("testpost", cmd_testpost))
+    app.add_handler(CallbackQueryHandler(handle_check_join, pattern="^check_join$"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     # پست خودکار هر روز ساعت ۹ شب به وقت ایران (۱۷:۳۰ UTC)
