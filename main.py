@@ -1,9 +1,9 @@
 import os
 import logging
-import random
+import asyncio
 from datetime import time as dtime, timezone as dt_timezone, datetime
 
-import google.generativeai as genai
+from groq import Groq
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
 
@@ -16,11 +16,11 @@ logger = logging.getLogger(__name__)
 
 # ===================== تنظیمات =====================
 BOT_TOKEN = os.getenv("BOT_TOKEN", "TOKEN_خودت_رو_اینجا_بذار")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "KEY_خودت_رو_اینجا_بذار")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "KEY_خودت_رو_اینجا_بذار")
 CHANNEL_USERNAME = os.getenv("CHANNEL_USERNAME", "@Fx_sptrading")
 
-genai.configure(api_key=GEMINI_API_KEY)
-MODEL_NAME = "gemini-2.5-flash"
+groq_client = Groq(api_key=GROQ_API_KEY)
+MODEL_NAME = "llama-3.3-70b-versatile"
 
 # ===================== شخصیت ربات =====================
 COACH_SYSTEM_PROMPT = """تو یک کوچ تخصصی روانشناسی معامله‌گری (ترید) هستی، نه یک تراپیست یا روانپزشک دارای مجوز بالینی.
@@ -65,14 +65,26 @@ TOPICS = [
     "خستگی ذهنی و فرسودگی بعد از ساعت‌ها تحلیل بازار",
 ]
 
-# ===================== فراخوانی Gemini =====================
-async def ask_gemini(system_prompt: str, user_message: str) -> str:
+# ===================== فراخوانی Groq =====================
+def _call_groq(system_prompt: str, user_message: str) -> str:
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": user_message})
+
+    completion = groq_client.chat.completions.create(
+        model=MODEL_NAME,
+        messages=messages,
+        temperature=0.7,
+        max_tokens=1024,
+    )
+    return completion.choices[0].message.content
+
+async def ask_ai(system_prompt: str, user_message: str) -> str:
     try:
-        model = genai.GenerativeModel(MODEL_NAME, system_instruction=system_prompt)
-        response = model.generate_content(user_message)
-        return response.text
+        return await asyncio.to_thread(_call_groq, system_prompt, user_message)
     except Exception as e:
-        logger.error(f"Gemini Error: {e}")
+        logger.error(f"Groq Error: {e}")
         return "⚠️ یه مشکل موقت پیش اومد، لطفاً چند لحظه دیگه دوباره امتحان کن."
 
 # ===================== هندلرها =====================
@@ -91,7 +103,7 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     user_text = update.message.text
     await update.message.chat.send_action("typing")
-    reply = await ask_gemini(COACH_SYSTEM_PROMPT, user_text)
+    reply = await ask_ai(COACH_SYSTEM_PROMPT, user_text)
     await update.message.reply_text(reply, parse_mode="Markdown")
 
 async def cmd_testpost(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -105,7 +117,7 @@ async def send_daily_post(ctx: ContextTypes.DEFAULT_TYPE):
     topic_index = datetime.now(dt_timezone.utc).toordinal() % len(TOPICS)
     topic = TOPICS[topic_index]
     prompt = DAILY_POST_PROMPT.format(topic=topic)
-    post_text = await ask_gemini("", prompt)
+    post_text = await ask_ai("", prompt)
 
     try:
         await ctx.bot.send_message(
