@@ -27,7 +27,13 @@ CHANNEL_LINK = f"https://t.me/{CHANNEL_USERNAME.lstrip('@')}"
 # ===================== شخصیت ربات =====================
 COACH_SYSTEM_PROMPT = """قانون مطلق شماره یک: تمام پاسخ‌هات باید ۱۰۰٪ به زبان فارسی باشه. هرگز حتی یک کلمه از زبان‌های هندی، ترکی، چینی، ژاپنی، کره‌ای، عربی، اسپانیایی یا هر زبان غیرفارسی استفاده نکن. اگر کلمه‌ای به ذهنت رسید که فارسی نیست، معادل فارسیش رو بنویس. اصطلاحات تخصصی انگلیسی رو فقط داخل پرانتز بنویس، مثل: ترس از ضرر (Loss Aversion).
 
-تو یک متخصص روانشناسی معامله‌گری هستی با دانش عمیق در حوزه‌های روانشناسی شناختی-رفتاری (CBT)، نظریه چشم‌انداز (Prospect Theory) دانیل کانمن، اقتصاد رفتاری، و مطالعات نوروساینس در تصمیم‌گیری مالی.
+قانون اصطلاحات: این کلمات رو دقیقاً همینطور بنویس و هرگز ترجمه نکن:
+ترید، تریدر، پوزیشن، چارت، بروکر، لوریج، اسکالپ، اسکالپینگ، سوینگ ترید، دی ترید، پیپ، لات، اسپرد، فیوچرز، فارکس، کریپتو
+
+این اصطلاحات رو با معادل فارسی + پرانتز انگلیسی بنویس:
+حد ضرر (Stop Loss)، حد سود (Take Profit)، برداشت سود (Payout)، مارجین (Margin)، اهرم (Leverage)، کال مارجین (Margin Call)، ترید انتقامی (Revenge Trading)، ترس از جا موندن (FOMO)، اعتماد بیش از حد (Overconfidence)، ترس از ضرر (Loss Aversion)، سیستم معاملاتی (Trading Plan)، مدیریت ریسک (Risk Management)، نقطه ورود (Entry Point)، نقطه خروج (Exit Point)، نسبت ریسک به ریوارد (Risk/Reward Ratio)، حجم معامله (Position Size)، روند بازار (Market Trend)، تحلیل تکنیکال (Technical Analysis)، تحلیل بنیادی (Fundamental Analysis)، بازار گاوی (Bull Market)، بازار خرسی (Bear Market)، نوسان‌گیری (Scalping)، شاخص (Index)
+
+ با دانش عمیق در حوزه‌های روانشناسی شناختی-رفتاری (CBT)، نظریه چشم‌انداز (Prospect Theory) دانیل کانمن، اقتصاد رفتاری، و مطالعات نوروساینس در تصمیم‌گیری مالی.
 
 سبک ارتباطی تو:
 - مثل یک روانشناس انسانی، گرم و واقعی صحبت کن — نه مثل یک چت‌بات که لیست می‌ده
@@ -88,26 +94,33 @@ def _strip_thinking(text: str) -> str:
     cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
     return cleaned.strip()
 
-def _has_foreign_chars(text: str) -> bool:
-    """چک می‌کنه آیا متن شامل کاراکترهای غیرفارسی/غیرانگلیسی هست"""
-    import unicodedata
-    for char in text:
-        if char.isspace() or char in '،؛؟!.,:;()[]{}«»\n*_-/\\@#%^&+=<>|~`"\'0123456789':
-            continue
-        cat = unicodedata.category(char)
-        block = ord(char)
-        # فارسی/عربی: 0x0600-0x06FF
-        if 0x0600 <= block <= 0x06FF:
-            continue
-        # لاتین/انگلیسی
-        if 0x0041 <= block <= 0x007A or 0x00C0 <= block <= 0x024F:
-            continue
+def _clean_persian(text: str) -> str:
+    """حذف مستقیم کاراکترهای غیرفارسی/غیرانگلیسی از متن"""
+    result = []
+    i = 0
+    while i < len(text):
+        char = text[i]
+        cp = ord(char)
+        # فارسی و عربی
+        if 0x0600 <= cp <= 0x06FF:
+            result.append(char)
+        # لاتین پایه (a-z, A-Z)
+        elif 0x0041 <= cp <= 0x007A:
+            result.append(char)
+        # اعداد و علائم نگارشی رایج
+        elif cp < 0x0041 and char in ' \n\t0123456789':
+            result.append(char)
+        elif char in '،؛؟!.,:;()[]{}«»\n*_-/\\@#٪%^&+=<>|~`"\'.…—–':
+            result.append(char)
         # ایموجی
-        if 0x1F300 <= block <= 0x1FAFF or 0x2600 <= block <= 0x27BF:
-            continue
-        # بقیه = مشکوک
-        return True
-    return False
+        elif 0x1F300 <= cp <= 0x1FAFF or 0x2600 <= cp <= 0x27BF or 0x231A <= cp <= 0x2B55:
+            result.append(char)
+        # بقیه = حذف
+        else:
+            # اگه وسط کلمه بود یه فاصله بذار
+            if result and result[-1] != ' ':
+                result.append(' ')
+    return re.sub(r' +', ' ', ''.join(result)).strip()
 
 def _call_groq(system_prompt: str, user_message: str) -> str:
     messages = []
@@ -124,23 +137,7 @@ def _call_groq(system_prompt: str, user_message: str) -> str:
     raw = completion.choices[0].message.content
     cleaned = _strip_thinking(raw)
     result = cleaned if cleaned else raw
-
-    # اگه کاراکتر غیرفارسی داشت، یه بار cleanup بزن
-    if _has_foreign_chars(result):
-        logger.warning("کاراکتر غیرفارسی پیدا شد، در حال پاکسازی...")
-        cleanup_messages = [
-            {"role": "system", "content": "متن زیر رو دقیقاً با همین معنی و محتوا، ولی کاملاً به فارسی خالص بازنویسی کن. هیچ کلمه‌ای از زبان‌های هندی، ترکی، چینی، ویتنامی یا هر زبان غیرفارسی نذار. اصطلاحات انگلیسی رو فقط داخل پرانتز بنویس."},
-            {"role": "user", "content": result}
-        ]
-        cleanup = groq_client.chat.completions.create(
-            model=MODEL_NAME,
-            messages=cleanup_messages,
-            temperature=0.3,
-            max_tokens=4096,
-        )
-        result = cleanup.choices[0].message.content.strip()
-
-    return result
+    return _clean_persian(result)
 
 async def ask_ai(system_prompt: str, user_message: str) -> str:
     for attempt in range(3):
