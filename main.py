@@ -2,6 +2,7 @@ import os
 import logging
 import asyncio
 import re
+import gc
 from datetime import time as dtime, timezone as dt_timezone, datetime
 
 from groq import Groq
@@ -16,111 +17,86 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ===================== تنظیمات =====================
-BOT_TOKEN = os.getenv("BOT_TOKEN", "TOKEN_خودت_رو_اینجا_بذار")
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "KEY_خودت_رو_اینجا_بذار")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "TOKEN_خودت")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "KEY_خودت")
 CHANNEL_USERNAME = os.getenv("CHANNEL_USERNAME", "@Fx_sptrading")
 
 groq_client = Groq(api_key=GROQ_API_KEY)
-MODEL_NAME = "llama-3.3-70b-versatile"
+# 🔥 تغییر مدل به مدل سبک‌تر و سریع‌تر
+MODEL_NAME = "llama-3.1-8b-instant"  # یا "llama-3.3-70b-versatile" اگه واقعاً لازم داری
 CHANNEL_LINK = f"https://t.me/{CHANNEL_USERNAME.lstrip('@')}"
 
+# 🔥 محدودیت طول پیام کاربر
+MAX_USER_MESSAGE_LENGTH = 1000
+
 # ===================== شخصیت ربات =====================
-COACH_SYSTEM_PROMPT = """قانون مطلق شماره یک: تمام پاسخ‌هات باید ۱۰۰٪ به زبان فارسی باشه. هرگز حتی یک کلمه از زبان‌های هندی، ترکی، چینی، ژاپنی، کره‌ای، عربی، اسپانیایی یا هر زبان غیرفارسی استفاده نکن. اگر کلمه‌ای به ذهنت رسید که فارسی نیست، معادل فارسیش رو بنویس. اصطلاحات تخصصی انگلیسی رو فقط داخل پرانتز بنویس، مثل: ترس از ضرر (Loss Aversion).
+COACH_SYSTEM_PROMPT = """قانون مطلق: تمام پاسخ‌هات ۱۰۰٪ فارسی باشه. اصطلاحات تخصصی انگلیسی فقط داخل پرانتز.
 
-قانون اصطلاحات: این کلمات رو دقیقاً همینطور بنویس و هرگز ترجمه نکن:
-ترید، تریدر، پوزیشن، چارت، بروکر، لوریج، اسکالپ، اسکالپینگ، سوینگ ترید، دی ترید، پیپ، لات، اسپرد، فیوچرز، فارکس، کریپتو
+اصطلاحاتی که فارسی نمی‌نویسی: ترید، تریدر، پوزیشن، چارت، بروکر، لوریج، اسکالپ، پیپ، لات، فارکس، کریپتو
 
-این اصطلاحات رو با معادل فارسی + پرانتز انگلیسی بنویس:
-حد ضرر (Stop Loss)، حد سود (Take Profit)، برداشت سود (Payout)، مارجین (Margin)، اهرم (Leverage)، کال مارجین (Margin Call)، ترید انتقامی (Revenge Trading)، ترس از جا موندن (FOMO)، اعتماد بیش از حد (Overconfidence)، ترس از ضرر (Loss Aversion)، سیستم معاملاتی (Trading Plan)، مدیریت ریسک (Risk Management)، نقطه ورود (Entry Point)، نقطه خروج (Exit Point)، نسبت ریسک به ریوارد (Risk/Reward Ratio)، حجم معامله (Position Size)، روند بازار (Market Trend)، تحلیل تکنیکال (Technical Analysis)، تحلیل بنیادی (Fundamental Analysis)، بازار گاوی (Bull Market)، بازار خرسی (Bear Market)، نوسان‌گیری (Scalping)، شاخص (Index)
+اصطلاحات با معادل فارسی + پرانتز: حد ضرر (Stop Loss)، حد سود (Take Profit)، ترید انتقامی (Revenge Trading)، ترس از جا موندن (FOMO)، ترس از ضرر (Loss Aversion)
 
- با دانش عمیق در حوزه‌های روانشناسی شناختی-رفتاری (CBT)، نظریه چشم‌انداز (Prospect Theory) دانیل کانمن، اقتصاد رفتاری، و مطالعات نوروساینس در تصمیم‌گیری مالی.
+تو یک کوچ روانشناسی ترید هستی با تخصص در CBT، نظریه چشم‌انداز کانمن، و نوروساینس.
 
-سبک ارتباطی تو:
-- مثل یک روانشناس انسانی، گرم و واقعی صحبت کن — نه مثل یک چت‌بات که لیست می‌ده
-- اول واقعاً گوش بده و احساس کاربر رو بازتاب بده («می‌فهمم این چقدر خسته‌کننده‌ست...»)
-- از اسم کاربر استفاده نکن (چون نمی‌دونی)، ولی لحنت شخصی و مستقیم باشه («تو»، «برات»)
-- گاهی یه سوال عمیق بپرس که کاربر رو به فکر وادار کنه
-- هرگز با «البته!» یا «قطعاً!» شروع نکن — طبیعی و انسانی باش
+سبک:
+- گرم و انسانی، نه چت‌بات
+- اول احساس کاربر رو بازتاب بده
+- از «تو» و «برات» استفاده کن
+- هرگز با «البته» شروع نکن
 
-ساختار پاسخ‌هات:
-۱. همدلی واقعی: اول احساس کاربر رو تأیید کن (۲-۳ جمله، نه الکی)
-۲. تحلیل علمی: ریشه روانشناختی رو با استناد به مفاهیم علمی توضیح بده
-   - از مفاهیمی مثل: Loss Aversion، Cognitive Bias، Amygdala Hijack، Dopamine Loop، Schema Therapy، Prospect Theory، سیستم ۱ و ۲ کانمن استفاده کن
-   - این مفاهیم رو به فارسی ساده توضیح بده، نه فقط اسمشون رو بیار
-۳. راهکارهای عملی: ۳-۴ راهکار مبتنی بر شواهد علمی بده که:
-   - از تحقیقات روانشناسی و نوروساینس برگرفته باشن
-   - قابل اجرا در معامله‌گری روزانه باشن
-   - با مثال کاربردی توضیح داده بشن
-۴. نکته طلایی: یه بینش عمیق‌تر یا سوال تأملی در پایان که کاربر رو به خودشناسی بیشتر دعوت کنه
+ساختار پاسخ:
+۱. همدلی واقعی (۲ جمله)
+۲. ریشه روانشناختی با مفهوم علمی (Loss Aversion، Amygdala Hijack، سیستم ۱ و ۲ کانمن)
+۳. ۳ راهکار عملی با مثال
+۴. یک سوال تأملی در پایان
 
-طول پاسخ: کامل و جامع (نه خلاصه‌سازی اجباری) — تا زمانی که مفید باشه، ادامه بده
+اگر نشانه بحران دیدی، به متخصص ارجاع بده."""
 
-زبان: فارسی روان، صمیمی و حرفه‌ای. از اصطلاحات تخصصی فقط با توضیح استفاده کن.
+DAILY_POST_PROMPT = """یک پست کوتاه برای کانال تلگرام روانشناسی ترید درباره: {topic}
 
-نکته ایمنی: اگر کاربر نشانه‌های بحران روانی، افسردگی شدید، یا آسیب به خود نشون داد — فوراً از ترید فاصله بگیر، با محبت کامل حضور داشته باش و او را به متخصص واقعی ارجاع بده."""
+ساختار:
+۱. عنوان جذاب با ایموجی
+۲. توضیح مشکل (۲ جمله)
+۳. ریشه روانشناختی (یک پاراگراف)
+۴. ۲ راهکار عملی
+۵. سوال تعاملی در پایان
 
-DAILY_POST_PROMPT = """یک پست آموزشی کوتاه برای کانال تلگرام روانشناسی ترید درباره موضوع زیر بنویس:
-
-موضوع: {topic}
-
-ساختار پست:
-۱. یک عنوان جذاب با ایموجی مرتبط (خط اول)
-۲. توضیح مشکل در ۲-۳ جمله
-۳. ریشه روانشناختی مشکل (یک پاراگراف کوتاه)
-۴. ۲-۳ راهکار عملی و قابل اجرا (به صورت لیست)
-۵. یک سوال تعاملی برای کامنت‌های مخاطبین در پایان
-
-پست باید کاملاً فارسی، صمیمی، حداکثر ۱۸۰ کلمه، و برای تریدرهای ایرانی قابل فهم باشه.
-از Markdown ساده استفاده کن (بولد با **متن**). فقط متن پست رو بنویس، بدون مقدمه اضافه."""
+فارسی، صمیمی، حداکثر ۱۵۰ کلمه. از **بولد** استفاده کن. فقط متن پست."""
 
 TOPICS = [
-    "ترس از دست دادن فرصت (FOMO) و ورود عجولانه به معامله",
-    "انتقام‌جویی در معامله بعد از یک ضرر بزرگ (Revenge Trading)",
-    "عدم پایبندی به حد ضرر (Stop Loss) و امیدواری بیجا",
-    "بیش‌اعتمادی به نفس بعد از چند معامله موفق پیاپی",
-    "ترس از خروج با سود کم و از دست دادن سودهای بزرگ‌تر",
-    "اضطراب و استرس قبل از باز کردن معامله",
-    "وابستگی روانی به نتیجه هر معامله و نوسان خلق‌وخو",
-    "مقایسه خودت با تریدرهای دیگه و حس حسادت یا ناامیدی",
-    "افزایش حجم معامله بعد از ضرر برای جبران سریع",
-    "عدم داشتن برنامه معاملاتی مشخص و تصمیم‌گیری احساسی",
-    "ترس از شکست که باعث عدم ورود به معاملات خوب می‌شه",
-    "خستگی ذهنی و فرسودگی بعد از ساعت‌ها تحلیل بازار",
+    "ترس از دست دادن فرصت (FOMO) و ورود عجولانه",
+    "ترید انتقامی بعد از ضرر بزرگ",
+    "عدم پایبندی به حد ضرر",
+    "بیش‌اعتمادی بعد از معاملات موفق",
+    "ترس از خروج با سود کم",
+    "اضطراب قبل از باز کردن معامله",
+    "وابستگی روانی به نتیجه معامله",
+    "مقایسه با تریدرهای دیگه",
+    "افزایش حجم بعد از ضرر",
+    "تصمیم‌گیری احساسی بدون برنامه",
+    "ترس از شکست و عدم ورود",
+    "خستگی ذهنی بعد از تحلیل طولانی",
 ]
 
 # ===================== فراخوانی Groq =====================
 def _strip_thinking(text: str) -> str:
-    """حذف بخش 'فکر کردن' مدل (داخل تگ think) و نگه داشتن فقط جواب نهایی"""
-    cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
-    return cleaned.strip()
+    return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
 def _clean_persian(text: str) -> str:
-    """حذف مستقیم کاراکترهای غیرفارسی/غیرانگلیسی از متن"""
-    result = []
-    i = 0
-    while i < len(text):
-        char = text[i]
-        cp = ord(char)
-        # فارسی و عربی
-        if 0x0600 <= cp <= 0x06FF:
-            result.append(char)
-        # لاتین پایه (a-z, A-Z)
-        elif 0x0041 <= cp <= 0x007A:
-            result.append(char)
-        # اعداد و علائم نگارشی رایج
-        elif cp < 0x0041 and char in ' \n\t0123456789':
-            result.append(char)
-        elif char in '،؛؟!.,:;()[]{}«»\n*_-/\\@#٪%^&+=<>|~`"\'.…—–':
-            result.append(char)
-        # ایموجی
-        elif 0x1F300 <= cp <= 0x1FAFF or 0x2600 <= cp <= 0x27BF or 0x231A <= cp <= 0x2B55:
-            result.append(char)
-        # بقیه = حذف
-        else:
-            # اگه وسط کلمه بود یه فاصله بذار
-            if result and result[-1] != ' ':
-                result.append(' ')
-    return re.sub(r' +', ' ', ''.join(result)).strip()
+    """نسخه بهینه‌شده با regex - خیلی سریع‌تر و سبک‌تر"""
+    # فقط کاراکترهای مجاز رو نگه دار
+    allowed_pattern = re.compile(
+        r'[\u0600-\u06FF'  # فارسی/عربی
+        r'a-zA-Z0-9'        # لاتین و اعداد
+        r'\s.,!?:;()\[\]{}«»\-_/\\@#%^&+=<>|~`"\'…—–*'  # علائم
+        r'\u1F300-\u1FAFF'  # ایموجی
+        r'\u2600-\u27BF'
+        r'\u231A-\u2B55'
+        r'،؛؟]+'
+    )
+    matches = allowed_pattern.findall(text)
+    result = ' '.join(matches)
+    return re.sub(r'\s+', ' ', result).strip()
 
 def _call_groq(system_prompt: str, user_message: str) -> str:
     messages = []
@@ -128,30 +104,40 @@ def _call_groq(system_prompt: str, user_message: str) -> str:
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": user_message})
 
-    completion = groq_client.chat.completions.create(
-        model=MODEL_NAME,
-        messages=messages,
-        temperature=0.7,
-        max_tokens=4096,
-    )
-    raw = completion.choices[0].message.content
-    cleaned = _strip_thinking(raw)
-    result = cleaned if cleaned else raw
-    return _clean_persian(result)
+    try:
+        completion = groq_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=messages,
+            temperature=0.7,
+            max_tokens=1500,  # 🔥 کاهش از 4096 به 1500
+        )
+        raw = completion.choices[0].message.content
+        cleaned = _strip_thinking(raw)
+        result = cleaned if cleaned else raw
+        final = _clean_persian(result)
+        
+        # 🔥 پاکسازی حافظه
+        del completion, raw, cleaned, result, messages
+        gc.collect()
+        
+        return final
+    except Exception as e:
+        logger.error(f"خطا در فراخوانی Groq: {e}")
+        raise
 
 async def ask_ai(system_prompt: str, user_message: str) -> str:
-    for attempt in range(3):
+    for attempt in range(2):  # 🔥 کاهش از 3 به 2
         try:
             result = await asyncio.to_thread(_call_groq, system_prompt, user_message)
             if result:
                 return result
         except Exception as e:
             logger.error(f"Groq Error (attempt {attempt+1}): {e}")
-            if attempt < 2:
+            if attempt < 1:
                 await asyncio.sleep(2)
     return "⚠️ یه مشکل موقت پیش اومد، لطفاً چند لحظه دیگه دوباره امتحان کن."
 
-# ===================== بررسی عضویت در کانال =====================
+# ===================== بررسی عضویت =====================
 async def is_member(bot, user_id: int) -> bool:
     try:
         member = await bot.get_chat_member(chat_id=CHANNEL_USERNAME, user_id=user_id)
@@ -173,89 +159,131 @@ JOIN_PROMPT = (
 
 # ===================== هندلرها =====================
 async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if not await is_member(ctx.bot, update.effective_user.id):
-        await update.message.reply_text(JOIN_PROMPT, reply_markup=join_keyboard())
-        return
+    try:
+        if not await is_member(ctx.bot, update.effective_user.id):
+            await update.message.reply_text(JOIN_PROMPT, reply_markup=join_keyboard())
+            return
 
-    await update.message.reply_text(
-        "🧠✨ به *Fx_sptrading* خوش اومدی!\n\n"
-        "اینجا جاییه که روانشناسی معامله‌گری رو جدی می‌گیریم. "
-        "بیشتر شکست‌های ترید از تحلیل تکنیکال ضعیف نمیاد — از *ذهنیتیه که با اون وارد بازار می‌شیم.*\n\n"
-        "من کوچ شخصی توام برای شناخت و مدیریت همون الگوهای ذهنی: FOMO، انتقام‌جویی بعد از ضرر، بی‌انضباطی، ترس از ضرر، بیش‌اعتمادی و هر چیزی که نمی‌ذاره با آرامش معامله کنی.\n\n"
-        "📝 *چطور کار می‌کنه؟*\n"
-        "همین الان، هر چالشی که توی ترید باهاش دست‌وپنجه نرم می‌کنی رو برام بنویس. با هم ریشه‌ش رو پیدا می‌کنیم و چند قدم عملی و قابل اجرا بهت می‌دم.\n\n"
-        "💬 فقط کافیه پیامت رو بفرستی!",
-        parse_mode="Markdown"
-    )
+        await update.message.reply_text(
+            "🧠✨ به *Fx_sptrading* خوش اومدی!\n\n"
+            "اینجا روانشناسی معامله‌گری رو جدی می‌گیریم. "
+            "بیشتر شکست‌های ترید از *ذهنیتیه که با اون وارد بازار می‌شیم.*\n\n"
+            "من کوچ شخصی توام برای: FOMO، انتقام‌جویی، بی‌انضباطی، ترس از ضرر و...\n\n"
+            "📝 *چطور کار می‌کنه؟*\n"
+            "هر چالشی توی ترید داری برام بنویس. ریشه‌ش رو پیدا می‌کنیم و راهکار عملی می‌دم.\n\n"
+            "💬 پیامت رو بفرست!",
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        logger.error(f"خطا در /start: {e}")
 
 async def handle_check_join(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    if await is_member(ctx.bot, query.from_user.id):
-        await query.answer("✅ عضویتت تایید شد!")
-        await query.message.edit_text(
-            "✅ عالی، عضویتت تایید شد!\n\n"
-            "حالا هر چالشی که توی ترید باهاش دست‌وپنجه نرم می‌کنی رو برام بنویس تا با هم ریشه‌ش رو پیدا کنیم 💬"
-        )
-    else:
-        await query.answer("هنوز عضو کانال نشدی! اول عضو شو، بعد دوباره بزن.", show_alert=True)
+    try:
+        query = update.callback_query
+        if await is_member(ctx.bot, query.from_user.id):
+            await query.answer("✅ عضویتت تایید شد!")
+            await query.message.edit_text(
+                "✅ عالی! حالا چالشت رو برام بنویس تا ریشه‌ش رو پیدا کنیم 💬"
+            )
+        else:
+            await query.answer("هنوز عضو کانال نشدی! اول عضو شو.", show_alert=True)
+    except Exception as e:
+        logger.error(f"خطا در check_join: {e}")
 
 async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    if not await is_member(ctx.bot, update.effective_user.id):
-        await update.message.reply_text(JOIN_PROMPT, reply_markup=join_keyboard())
-        return
-
-    user_text = update.message.text
-    # پیام انتظار
-    wait_msg = await update.message.reply_text(
-        "🧠 در حال بررسی دقیق مشکلت هستم...\n"
-        "چند لحظه صبر کن، یه پاسخ کامل و دقیق برات آماده می‌کنم ✍️"
-    )
-    reply = await ask_ai(COACH_SYSTEM_PROMPT, user_text)
-    # جایگزین کردن پیام انتظار با جواب اصلی
     try:
-        await wait_msg.edit_text(reply, parse_mode="Markdown")
-    except Exception:
-        await update.message.reply_text(reply, parse_mode="Markdown")
+        if not await is_member(ctx.bot, update.effective_user.id):
+            await update.message.reply_text(JOIN_PROMPT, reply_markup=join_keyboard())
+            return
+
+        user_text = update.message.text
+        
+        # 🔥 محدودیت طول پیام
+        if len(user_text) > MAX_USER_MESSAGE_LENGTH:
+            await update.message.reply_text(
+                f"⚠️ پیامت خیلی طولانیه! لطفاً کمتر از {MAX_USER_MESSAGE_LENGTH} کاراکتر بنویس."
+            )
+            return
+        
+        wait_msg = await update.message.reply_text(
+            "🧠 در حال بررسی... چند لحظه صبر کن ✍️"
+        )
+        
+        reply = await ask_ai(COACH_SYSTEM_PROMPT, user_text)
+        
+        try:
+            await wait_msg.edit_text(reply, parse_mode="Markdown")
+        except Exception:
+            try:
+                await update.message.reply_text(reply, parse_mode="Markdown")
+            except Exception:
+                # اگه Markdown مشکل داشت، بدون فرمت بفرست
+                await update.message.reply_text(reply)
+        
+        # 🔥 پاکسازی حافظه
+        del reply, user_text
+        gc.collect()
+        
+    except Exception as e:
+        logger.error(f"خطا در handle_message: {e}")
+        try:
+            await update.message.reply_text("⚠️ یه مشکل پیش اومد، دوباره امتحان کن.")
+        except:
+            pass
 
 async def cmd_testpost(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    """ارسال دستی یک پست تستی به کانال (برای آزمایش)"""
-    await update.message.reply_text("⏳ در حال ساخت پست...")
-    await send_daily_post(ctx)
-    await update.message.reply_text("✅ پست به کانال ارسال شد.")
+    try:
+        await update.message.reply_text("⏳ در حال ساخت پست...")
+        await send_daily_post(ctx)
+        await update.message.reply_text("✅ پست ارسال شد.")
+    except Exception as e:
+        logger.error(f"خطا در testpost: {e}")
 
 # ===================== پست خودکار روزانه =====================
 async def send_daily_post(ctx: ContextTypes.DEFAULT_TYPE):
-    topic_index = datetime.now(dt_timezone.utc).toordinal() % len(TOPICS)
-    topic = TOPICS[topic_index]
-    prompt = DAILY_POST_PROMPT.format(topic=topic)
-    post_text = await ask_ai("", prompt)
-
     try:
+        topic_index = datetime.now(dt_timezone.utc).toordinal() % len(TOPICS)
+        topic = TOPICS[topic_index]
+        prompt = DAILY_POST_PROMPT.format(topic=topic)
+        post_text = await ask_ai("", prompt)
+
         await ctx.bot.send_message(
             chat_id=CHANNEL_USERNAME,
             text=post_text,
             parse_mode="Markdown"
         )
         logger.info(f"✅ پست روزانه ارسال شد: {topic}")
+        
+        # 🔥 پاکسازی
+        del post_text, prompt
+        gc.collect()
+        
     except Exception as e:
-        logger.error(f"خطا در ارسال پست به کانال: {e}")
+        logger.error(f"خطا در ارسال پست: {e}")
+
+# 🔥 Error Handler کلی
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    logger.error(f"Exception: {context.error}", exc_info=context.error)
 
 # ===================== اجرا =====================
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
+    
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("testpost", cmd_testpost))
     app.add_handler(CallbackQueryHandler(handle_check_join, pattern="^check_join$"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    
+    # 🔥 اضافه کردن error handler
+    app.add_error_handler(error_handler)
 
-    # پست خودکار هر روز ساعت ۹ شب به وقت ایران (۱۷:۳۰ UTC)
     app.job_queue.run_daily(
         send_daily_post,
         time=dtime(hour=17, minute=30, tzinfo=dt_timezone.utc)
     )
 
     logger.info("✅ ربات کوچ روانشناسی ترید شروع به کار کرد!")
-    app.run_polling(allowed_updates=Update.ALL_TYPES)
+    app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == "__main__":
     main()
