@@ -21,7 +21,7 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY", "KEY_خودت_رو_اینجا_بذار"
 CHANNEL_USERNAME = os.getenv("CHANNEL_USERNAME", "@Fx_sptrading")
 
 groq_client = Groq(api_key=GROQ_API_KEY)
-MODEL_NAME = "qwen3-32b"
+MODEL_NAME = "llama-3.3-70b-versatile"
 CHANNEL_LINK = f"https://t.me/{CHANNEL_USERNAME.lstrip('@')}"
 
 # ===================== شخصیت ربات =====================
@@ -187,8 +187,7 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         "من کوچ شخصی توام برای شناخت و مدیریت همون الگوهای ذهنی: FOMO، انتقام‌جویی بعد از ضرر، بی‌انضباطی، ترس از ضرر، بیش‌اعتمادی و هر چیزی که نمی‌ذاره با آرامش معامله کنی.\n\n"
         "📝 *چطور کار می‌کنه؟*\n"
         "همین الان، هر چالشی که توی ترید باهاش دست‌وپنجه نرم می‌کنی رو برام بنویس. با هم ریشه‌ش رو پیدا می‌کنیم و چند قدم عملی و قابل اجرا بهت می‌دم.\n\n"
-        "💬 فقط کافیه پیامت رو بفرستی!\n\n"
-        "_من جایگزین درمان روانشناسی بالینی نیستم؛ در شرایط جدی، حتماً با یک متخصص واقعی صحبت کن._",
+        "💬 فقط کافیه پیامت رو بفرستی!",
         parse_mode="Markdown"
     )
 
