@@ -17,65 +17,123 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ===================== تنظیمات =====================
-BOT_TOKEN = os.getenv("BOT_TOKEN", "TOKEN_خودت")
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "KEY_خودت")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "TOKEN_خودت_رو_اینجا_بذار")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "KEY_خودت_رو_اینجا_بذار")
 CHANNEL_USERNAME = os.getenv("CHANNEL_USERNAME", "@Fx_sptrading")
 
 groq_client = Groq(api_key=GROQ_API_KEY)
-# 🔥 تغییر مدل به مدل سبک‌تر و سریع‌تر
-MODEL_NAME = "llama-3.1-8b-instant"  # یا "llama-3.3-70b-versatile" اگه واقعاً لازم داری
+MODEL_NAME = "llama-3.1-8b-instant"
 CHANNEL_LINK = f"https://t.me/{CHANNEL_USERNAME.lstrip('@')}"
 
-# 🔥 محدودیت طول پیام کاربر
 MAX_USER_MESSAGE_LENGTH = 1000
 
 # ===================== شخصیت ربات =====================
-COACH_SYSTEM_PROMPT = """قانون مطلق: تمام پاسخ‌هات ۱۰۰٪ فارسی باشه. اصطلاحات تخصصی انگلیسی فقط داخل پرانتز.
+COACH_SYSTEM_PROMPT = """تو یک کوچ روانشناسی ترید حرفه‌ای هستی با تخصص در CBT، نظریه چشم‌انداز کانمن، اقتصاد رفتاری و نوروساینس.
 
-اصطلاحاتی که فارسی نمی‌نویسی: ترید، تریدر، پوزیشن، چارت، بروکر، لوریج، اسکالپ، پیپ، لات، فارکس، کریپتو
+🔴 قانون مطلق زبان:
+تمام پاسخ‌هات ۱۰۰٪ فارسی باشه. اصطلاحات تخصصی انگلیسی فقط داخل پرانتز.
 
-اصطلاحات با معادل فارسی + پرانتز: حد ضرر (Stop Loss)، حد سود (Take Profit)، ترید انتقامی (Revenge Trading)، ترس از جا موندن (FOMO)، ترس از ضرر (Loss Aversion)
+اصطلاحاتی که فارسی نمی‌نویسی:
+ترید، تریدر، پوزیشن، چارت، بروکر، لوریج، اسکالپ، پیپ، لات، فارکس، کریپتو
 
-تو یک کوچ روانشناسی ترید هستی با تخصص در CBT، نظریه چشم‌انداز کانمن، و نوروساینس.
+اصطلاحاتی که با معادل فارسی + پرانتز می‌نویسی:
+حد ضرر (Stop Loss)، حد سود (Take Profit)، ترید انتقامی (Revenge Trading)، ترس از جا موندن (FOMO)، ترس از ضرر (Loss Aversion)، اعتماد بیش از حد (Overconfidence)
 
-سبک:
-- گرم و انسانی، نه چت‌بات
-- اول احساس کاربر رو بازتاب بده
-- از «تو» و «برات» استفاده کن
-- هرگز با «البته» شروع نکن
+━━━━━━━━━━━━━━━━━━━━━
 
-ساختار پاسخ:
-۱. همدلی واقعی (۲ جمله)
-۲. ریشه روانشناختی با مفهوم علمی (Loss Aversion، Amygdala Hijack، سیستم ۱ و ۲ کانمن)
-۳. ۳ راهکار عملی با مثال
-۴. یک سوال تأملی در پایان
+🎨 قوانین فرمت‌بندی پاسخ (خیلی مهم):
 
-اگر نشانه بحران دیدی، به متخصص ارجاع بده."""
+حتماً از این ساختار با ایموجی و عنوان استفاده کن:
 
-DAILY_POST_PROMPT = """یک پست کوتاه برای کانال تلگرام روانشناسی ترید درباره: {topic}
+💬 **درک احساست**
+[۲ جمله همدلانه که نشون بده حسش رو فهمیدی]
 
-ساختار:
-۱. عنوان جذاب با ایموجی
-۲. توضیح مشکل (۲ جمله)
-۳. ریشه روانشناختی (یک پاراگراف)
-۴. ۲ راهکار عملی
-۵. سوال تعاملی در پایان
+🧠 **ریشه روانشناختی**
+[توضیح علمی در ۳-۴ جمله با اشاره به یک مفهوم مثل Loss Aversion یا Amygdala Hijack]
 
-فارسی، صمیمی، حداکثر ۱۵۰ کلمه. از **بولد** استفاده کن. فقط متن پست."""
+✅ **راهکارهای عملی**
+
+🔹 **راهکار اول: [عنوان کوتاه]**
+[توضیح در ۲ جمله با مثال]
+
+🔹 **راهکار دوم: [عنوان کوتاه]**
+[توضیح در ۲ جمله با مثال]
+
+🔹 **راهکار سوم: [عنوان کوتاه]**
+[توضیح در ۲ جمله با مثال]
+
+💡 **نکته طلایی**
+[یک بینش عمیق یا سوال تأملی در ۱-۲ جمله]
+
+━━━━━━━━━━━━━━━━━━━━━
+
+📌 قوانین نوشتاری:
+
+۱. حتماً بین هر بخش یک خط خالی بذار
+۲. عنوان‌های اصلی رو با **بولد** بنویس
+۳. از ایموجی مرتبط در ابتدای هر بخش استفاده کن
+۴. جملات رو کوتاه و واضح بنویس (حداکثر ۲۰ کلمه)
+۵. هرگز پاراگراف‌های طولانی ننویس
+۶. از «تو» و «برات» استفاده کن، نه «شما»
+
+🚫 ممنوع‌ها:
+- شروع با «البته!» یا «قطعاً!»
+- نوشتن همه چی پشت سر هم بدون فاصله
+- استفاده از پاراگراف طولانی
+- استفاده از اسم کاربر
+
+⚠️ نکته ایمنی:
+اگر کاربر نشانه بحران روانی یا آسیب به خود نشون داد، با محبت به متخصص واقعی ارجاع بده."""
+
+DAILY_POST_PROMPT = """یک پست آموزشی برای کانال تلگرام روانشناسی ترید درباره: {topic}
+
+🎨 ساختار دقیق پست (حتماً رعایت کن):
+
+🎯 **[عنوان جذاب با ایموجی]**
+
+[یک جمله قلابی که توجه رو جلب کنه]
+
+━━━━━━━━━━━━━━
+
+❌ **مشکل چیه؟**
+[توضیح مشکل در ۲ جمله کوتاه]
+
+🧠 **چرا این اتفاق می‌افته؟**
+[ریشه روانشناختی در ۲-۳ جمله با یک مفهوم علمی]
+
+✅ **چطور حلش کنیم؟**
+
+🔸 [راهکار اول در یک جمله]
+
+🔸 [راهکار دوم در یک جمله]
+
+🔸 [راهکار سوم در یک جمله]
+
+━━━━━━━━━━━━━━
+
+💬 **سوال امروز:**
+[یک سوال تعاملی که مخاطب جواب بده]
+
+📌 قوانین:
+۱. حتماً بین بخش‌ها خط خالی بذار
+۲. از **بولد** برای عنوان‌ها استفاده کن
+۳. حداکثر ۱۵۰ کلمه
+۴. زبان فارسی صمیمی
+۵. فقط متن پست (بدون مقدمه)"""
 
 TOPICS = [
-    "ترس از دست دادن فرصت (FOMO) و ورود عجولانه",
-    "ترید انتقامی بعد از ضرر بزرگ",
-    "عدم پایبندی به حد ضرر",
-    "بیش‌اعتمادی بعد از معاملات موفق",
-    "ترس از خروج با سود کم",
-    "اضطراب قبل از باز کردن معامله",
-    "وابستگی روانی به نتیجه معامله",
-    "مقایسه با تریدرهای دیگه",
-    "افزایش حجم بعد از ضرر",
-    "تصمیم‌گیری احساسی بدون برنامه",
-    "ترس از شکست و عدم ورود",
-    "خستگی ذهنی بعد از تحلیل طولانی",
+    "ترس از دست دادن فرصت (FOMO) و ورود عجولانه به معامله",
+    "انتقام‌جویی در معامله بعد از یک ضرر بزرگ (Revenge Trading)",
+    "عدم پایبندی به حد ضرر (Stop Loss) و امیدواری بیجا",
+    "بیش‌اعتمادی به نفس بعد از چند معامله موفق پیاپی",
+    "ترس از خروج با سود کم و از دست دادن سودهای بزرگ‌تر",
+    "اضطراب و استرس قبل از باز کردن معامله",
+    "وابستگی روانی به نتیجه هر معامله و نوسان خلق‌وخو",
+    "مقایسه خودت با تریدرهای دیگه و حس حسادت یا ناامیدی",
+    "افزایش حجم معامله بعد از ضرر برای جبران سریع",
+    "عدم داشتن برنامه معاملاتی مشخص و تصمیم‌گیری احساسی",
+    "ترس از شکست که باعث عدم ورود به معاملات خوب می‌شه",
+    "خستگی ذهنی و فرسودگی بعد از ساعت‌ها تحلیل بازار",
 ]
 
 # ===================== فراخوانی Groq =====================
@@ -83,13 +141,11 @@ def _strip_thinking(text: str) -> str:
     return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
 def _clean_persian(text: str) -> str:
-    """نسخه بهینه‌شده با regex - خیلی سریع‌تر و سبک‌تر"""
-    # فقط کاراکترهای مجاز رو نگه دار
     allowed_pattern = re.compile(
-        r'[\u0600-\u06FF'  # فارسی/عربی
-        r'a-zA-Z0-9'        # لاتین و اعداد
-        r'\s.,!?:;()\[\]{}«»\-_/\\@#%^&+=<>|~`"\'…—–*'  # علائم
-        r'\u1F300-\u1FAFF'  # ایموجی
+        r'[\u0600-\u06FF'
+        r'a-zA-Z0-9'
+        r'\s.,!?:;()\[\]{}«»\-_/\\@#%^&+=<>|~`"\'…—–*'
+        r'\u1F300-\u1FAFF'
         r'\u2600-\u27BF'
         r'\u231A-\u2B55'
         r'،؛؟]+'
@@ -109,14 +165,14 @@ def _call_groq(system_prompt: str, user_message: str) -> str:
             model=MODEL_NAME,
             messages=messages,
             temperature=0.7,
-            max_tokens=1500,  # 🔥 کاهش از 4096 به 1500
+            max_tokens=2000,
+            top_p=0.9,
         )
         raw = completion.choices[0].message.content
         cleaned = _strip_thinking(raw)
         result = cleaned if cleaned else raw
         final = _clean_persian(result)
         
-        # 🔥 پاکسازی حافظه
         del completion, raw, cleaned, result, messages
         gc.collect()
         
@@ -126,7 +182,7 @@ def _call_groq(system_prompt: str, user_message: str) -> str:
         raise
 
 async def ask_ai(system_prompt: str, user_message: str) -> str:
-    for attempt in range(2):  # 🔥 کاهش از 3 به 2
+    for attempt in range(2):
         try:
             result = await asyncio.to_thread(_call_groq, system_prompt, user_message)
             if result:
@@ -166,12 +222,12 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
         await update.message.reply_text(
             "🧠✨ به *Fx_sptrading* خوش اومدی!\n\n"
-            "اینجا روانشناسی معامله‌گری رو جدی می‌گیریم. "
-            "بیشتر شکست‌های ترید از *ذهنیتیه که با اون وارد بازار می‌شیم.*\n\n"
-            "من کوچ شخصی توام برای: FOMO، انتقام‌جویی، بی‌انضباطی، ترس از ضرر و...\n\n"
+            "اینجا جاییه که روانشناسی معامله‌گری رو جدی می‌گیریم. "
+            "بیشتر شکست‌های ترید از تحلیل تکنیکال ضعیف نمیاد — از *ذهنیتیه که با اون وارد بازار می‌شیم.*\n\n"
+            "من کوچ شخصی توام برای شناخت و مدیریت همون الگوهای ذهنی: FOMO، انتقام‌جویی بعد از ضرر، بی‌انضباطی، ترس از ضرر، بیش‌اعتمادی و هر چیزی که نمی‌ذاره با آرامش معامله کنی.\n\n"
             "📝 *چطور کار می‌کنه؟*\n"
-            "هر چالشی توی ترید داری برام بنویس. ریشه‌ش رو پیدا می‌کنیم و راهکار عملی می‌دم.\n\n"
-            "💬 پیامت رو بفرست!",
+            "همین الان، هر چالشی که توی ترید باهاش دست‌وپنجه نرم می‌کنی رو برام بنویس. با هم ریشه‌ش رو پیدا می‌کنیم و چند قدم عملی و قابل اجرا بهت می‌دم.\n\n"
+            "💬 فقط کافیه پیامت رو بفرستی!",
             parse_mode="Markdown"
         )
     except Exception as e:
@@ -183,10 +239,11 @@ async def handle_check_join(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         if await is_member(ctx.bot, query.from_user.id):
             await query.answer("✅ عضویتت تایید شد!")
             await query.message.edit_text(
-                "✅ عالی! حالا چالشت رو برام بنویس تا ریشه‌ش رو پیدا کنیم 💬"
+                "✅ عالی، عضویتت تایید شد!\n\n"
+                "حالا هر چالشی که توی ترید باهاش دست‌وپنجه نرم می‌کنی رو برام بنویس تا با هم ریشه‌ش رو پیدا کنیم 💬"
             )
         else:
-            await query.answer("هنوز عضو کانال نشدی! اول عضو شو.", show_alert=True)
+            await query.answer("هنوز عضو کانال نشدی! اول عضو شو، بعد دوباره بزن.", show_alert=True)
     except Exception as e:
         logger.error(f"خطا در check_join: {e}")
 
@@ -198,7 +255,6 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
         user_text = update.message.text
         
-        # 🔥 محدودیت طول پیام
         if len(user_text) > MAX_USER_MESSAGE_LENGTH:
             await update.message.reply_text(
                 f"⚠️ پیامت خیلی طولانیه! لطفاً کمتر از {MAX_USER_MESSAGE_LENGTH} کاراکتر بنویس."
@@ -206,7 +262,8 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             return
         
         wait_msg = await update.message.reply_text(
-            "🧠 در حال بررسی... چند لحظه صبر کن ✍️"
+            "🧠 در حال بررسی دقیق مشکلت هستم...\n"
+            "چند لحظه صبر کن، یه پاسخ کامل و دقیق برات آماده می‌کنم ✍️"
         )
         
         reply = await ask_ai(COACH_SYSTEM_PROMPT, user_text)
@@ -217,10 +274,8 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             try:
                 await update.message.reply_text(reply, parse_mode="Markdown")
             except Exception:
-                # اگه Markdown مشکل داشت، بدون فرمت بفرست
                 await update.message.reply_text(reply)
         
-        # 🔥 پاکسازی حافظه
         del reply, user_text
         gc.collect()
         
@@ -235,7 +290,7 @@ async def cmd_testpost(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     try:
         await update.message.reply_text("⏳ در حال ساخت پست...")
         await send_daily_post(ctx)
-        await update.message.reply_text("✅ پست ارسال شد.")
+        await update.message.reply_text("✅ پست به کانال ارسال شد.")
     except Exception as e:
         logger.error(f"خطا در testpost: {e}")
 
@@ -254,14 +309,12 @@ async def send_daily_post(ctx: ContextTypes.DEFAULT_TYPE):
         )
         logger.info(f"✅ پست روزانه ارسال شد: {topic}")
         
-        # 🔥 پاکسازی
         del post_text, prompt
         gc.collect()
         
     except Exception as e:
-        logger.error(f"خطا در ارسال پست: {e}")
+        logger.error(f"خطا در ارسال پست به کانال: {e}")
 
-# 🔥 Error Handler کلی
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.error(f"Exception: {context.error}", exc_info=context.error)
 
@@ -274,7 +327,6 @@ def main():
     app.add_handler(CallbackQueryHandler(handle_check_join, pattern="^check_join$"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    # 🔥 اضافه کردن error handler
     app.add_error_handler(error_handler)
 
     app.job_queue.run_daily(
