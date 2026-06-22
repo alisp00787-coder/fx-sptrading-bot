@@ -88,6 +88,27 @@ def _strip_thinking(text: str) -> str:
     cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
     return cleaned.strip()
 
+def _has_foreign_chars(text: str) -> bool:
+    """چک می‌کنه آیا متن شامل کاراکترهای غیرفارسی/غیرانگلیسی هست"""
+    import unicodedata
+    for char in text:
+        if char.isspace() or char in '،؛؟!.,:;()[]{}«»\n*_-/\\@#%^&+=<>|~`"\'0123456789':
+            continue
+        cat = unicodedata.category(char)
+        block = ord(char)
+        # فارسی/عربی: 0x0600-0x06FF
+        if 0x0600 <= block <= 0x06FF:
+            continue
+        # لاتین/انگلیسی
+        if 0x0041 <= block <= 0x007A or 0x00C0 <= block <= 0x024F:
+            continue
+        # ایموجی
+        if 0x1F300 <= block <= 0x1FAFF or 0x2600 <= block <= 0x27BF:
+            continue
+        # بقیه = مشکوک
+        return True
+    return False
+
 def _call_groq(system_prompt: str, user_message: str) -> str:
     messages = []
     if system_prompt:
@@ -102,7 +123,24 @@ def _call_groq(system_prompt: str, user_message: str) -> str:
     )
     raw = completion.choices[0].message.content
     cleaned = _strip_thinking(raw)
-    return cleaned if cleaned else raw
+    result = cleaned if cleaned else raw
+
+    # اگه کاراکتر غیرفارسی داشت، یه بار cleanup بزن
+    if _has_foreign_chars(result):
+        logger.warning("کاراکتر غیرفارسی پیدا شد، در حال پاکسازی...")
+        cleanup_messages = [
+            {"role": "system", "content": "متن زیر رو دقیقاً با همین معنی و محتوا، ولی کاملاً به فارسی خالص بازنویسی کن. هیچ کلمه‌ای از زبان‌های هندی، ترکی، چینی، ویتنامی یا هر زبان غیرفارسی نذار. اصطلاحات انگلیسی رو فقط داخل پرانتز بنویس."},
+            {"role": "user", "content": result}
+        ]
+        cleanup = groq_client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=cleanup_messages,
+            temperature=0.3,
+            max_tokens=4096,
+        )
+        result = cleanup.choices[0].message.content.strip()
+
+    return result
 
 async def ask_ai(system_prompt: str, user_message: str) -> str:
     for attempt in range(3):
