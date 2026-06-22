@@ -96,7 +96,7 @@ def _call_groq(system_prompt: str, user_message: str) -> str:
         model=MODEL_NAME,
         messages=messages,
         temperature=0.7,
-        max_tokens=2048,
+        max_tokens=8192,
     )
     raw = completion.choices[0].message.content
     cleaned = _strip_thinking(raw)
