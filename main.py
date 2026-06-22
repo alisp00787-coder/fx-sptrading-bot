@@ -21,11 +21,13 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY", "KEY_خودت_رو_اینجا_بذار"
 CHANNEL_USERNAME = os.getenv("CHANNEL_USERNAME", "@Fx_sptrading")
 
 groq_client = Groq(api_key=GROQ_API_KEY)
-MODEL_NAME = "qwen/qwen3.6-27b"
+MODEL_NAME = "llama-3.3-70b-versatile"
 CHANNEL_LINK = f"https://t.me/{CHANNEL_USERNAME.lstrip('@')}"
 
 # ===================== شخصیت ربات =====================
-COACH_SYSTEM_PROMPT = """تو یک متخصص روانشناسی معامله‌گری هستی با دانش عمیق در حوزه‌های روانشناسی شناختی-رفتاری (CBT)، نظریه چشم‌انداز (Prospect Theory) دانیل کانمن، اقتصاد رفتاری، و مطالعات نوروساینس در تصمیم‌گیری مالی.
+COACH_SYSTEM_PROMPT = """قانون مطلق: تمام پاسخ‌هات باید ۱۰۰٪ به زبان فارسی باشه. هرگز از کلمات چینی، ژاپنی، کره‌ای، اسپانیایی یا هر زبان غیرفارسی استفاده نکن. اصطلاحات انگلیسی رو فقط داخل پرانتز بنویس.
+
+تو یک متخصص روانشناسی معامله‌گری هستی با دانش عمیق در حوزه‌های روانشناسی شناختی-رفتاری (CBT)، نظریه چشم‌انداز (Prospect Theory) دانیل کانمن، اقتصاد رفتاری، و مطالعات نوروساینس در تصمیم‌گیری مالی.
 
 سبک ارتباطی تو:
 - مثل یک روانشناس انسانی، گرم و واقعی صحبت کن — نه مثل یک چت‌بات که لیست می‌ده
@@ -96,18 +98,23 @@ def _call_groq(system_prompt: str, user_message: str) -> str:
         model=MODEL_NAME,
         messages=messages,
         temperature=0.7,
-        max_tokens=8192,
+        max_tokens=4096,
     )
     raw = completion.choices[0].message.content
     cleaned = _strip_thinking(raw)
     return cleaned if cleaned else raw
 
 async def ask_ai(system_prompt: str, user_message: str) -> str:
-    try:
-        return await asyncio.to_thread(_call_groq, system_prompt, user_message)
-    except Exception as e:
-        logger.error(f"Groq Error: {e}")
-        return "⚠️ یه مشکل موقت پیش اومد، لطفاً چند لحظه دیگه دوباره امتحان کن."
+    for attempt in range(3):
+        try:
+            result = await asyncio.to_thread(_call_groq, system_prompt, user_message)
+            if result:
+                return result
+        except Exception as e:
+            logger.error(f"Groq Error (attempt {attempt+1}): {e}")
+            if attempt < 2:
+                await asyncio.sleep(2)
+    return "⚠️ یه مشکل موقت پیش اومد، لطفاً چند لحظه دیگه دوباره امتحان کن."
 
 # ===================== بررسی عضویت در کانال =====================
 async def is_member(bot, user_id: int) -> bool:
@@ -164,9 +171,17 @@ async def handle_message(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return
 
     user_text = update.message.text
-    await update.message.chat.send_action("typing")
+    # پیام انتظار
+    wait_msg = await update.message.reply_text(
+        "🧠 در حال بررسی دقیق مشکلت هستم...\n"
+        "چند لحظه صبر کن، یه پاسخ کامل و دقیق برات آماده می‌کنم ✍️"
+    )
     reply = await ask_ai(COACH_SYSTEM_PROMPT, user_text)
-    await update.message.reply_text(reply, parse_mode="Markdown")
+    # جایگزین کردن پیام انتظار با جواب اصلی
+    try:
+        await wait_msg.edit_text(reply, parse_mode="Markdown")
+    except Exception:
+        await update.message.reply_text(reply, parse_mode="Markdown")
 
 async def cmd_testpost(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """ارسال دستی یک پست تستی به کانال (برای آزمایش)"""
